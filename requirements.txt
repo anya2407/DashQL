@@ -12,3 +12,4 @@ sentence-transformers
 sqlglot
 python-dotenv
 PyGithub
+langgraph-checkpoint-sqlite
