@@ -1,0 +1,14 @@
+streamlit
+langgraph
+langchain
+langchain-google-genai
+google-generativeai
+sqlalchemy
+pandas
+numpy
+plotly
+chromadb
+sentence-transformers
+sqlglot
+python-dotenv
+PyGithub
