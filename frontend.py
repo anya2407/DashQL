@@ -1,63 +1,168 @@
 import streamlit as st
-from main import chatbot
-from langchain_core.messages import HumanMessage
-from langchain_core.messages import AIMessageChunk
-
-if "current_charts" not in st.session_state:
-    st.session_state.current_charts = []
-
 import uuid
-if 'thread_id' not in st.session_state:
-    st.session_state['thread_id'] = str(uuid.uuid4())
-    
+import plotly.express as px
+
+from main import chatbot
+
+# -----------------------------
+# Page Config
+# -----------------------------
+
+st.set_page_config(
+    page_title="DashQL",
+    page_icon="📊",
+    layout="wide"
+)
+
+st.title("📊 DashQL")
+
+# -----------------------------
+# Session State
+# -----------------------------
+
+if "thread_id" not in st.session_state:
+    st.session_state.thread_id = str(uuid.uuid4())
+
 CONFIG = {
     "configurable": {
         "thread_id": st.session_state.thread_id
     }
 }
-  
-if 'message_history' not in st.session_state:
-    st.session_state['message_history']=[]
 
-for message in st.session_state['message_history']:
-    with st.chat_message(message['role']):
-        st.text(message['content'])
-         
-user_input=st.chat_input('type here')
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-def extract_text(content):
-    if isinstance(content, list):
-        return "".join(
-            part.get("text", "") for part in content if isinstance(part, dict)
-        )
-    return content
- 
+# -----------------------------
+# Show Chat History
+# -----------------------------
+
+for msg in st.session_state.history:
+
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# -----------------------------
+# User Input
+# -----------------------------
+
+user_input = st.chat_input("Describe the dashboard you want...")
+
 if user_input:
-    st.session_state.current_charts = []
 
-    st.session_state['message_history'].append({'role':'user','content':user_input})
-    with st.chat_message('user'):
-        st.text(user_input)
+    st.session_state.history.append(
+        {
+            "role": "user",
+            "content": user_input
+        }
+    )
 
+    with st.chat_message("user"):
+        st.markdown(user_input)
 
-    with st.chat_message('ai'):
-        def ai_stream():
-            for message_chunk, metadata in chatbot.stream(
-                {"messages": [HumanMessage(content=user_input)]},
-                config=CONFIG,
-                stream_mode="messages",
-            ):
-                if isinstance(message_chunk, AIMessageChunk):
-                    text = extract_text(message_chunk.content)
-                    if text:
-                        yield text
+    with st.chat_message("assistant"):
 
-        ai_message = st.write_stream(ai_stream())
-        st.write("Frontend charts:", len(st.session_state.current_charts))
+        status = st.status(
+            "⚙️ Generating Dashboard...",
+            expanded=True
+        )
 
-        for fig in st.session_state.current_charts:
-            st.plotly_chart(fig)
+        initial_state = {
+            "messages": [],
+            "request": user_input,
+            "dashboard_found": False,
+            "dashboard_id": "",
+            "dashboard_plan": [],
+            "sql_queries": [],
+            "datasets": {},
+            "dashboard_layout": [],
+            "progress": "",
+            "answer": ""
+        }
 
-    st.session_state['message_history'].append({'role':'ai','content':ai_message})
+        for step in chatbot.stream(initial_state, config=CONFIG, stream_mode="values"):
+            if step.get("progress"):
+                status.write(step["progress"])
+            result = step  # keeps updating; ends up holding the final state
 
-        
+        status.update(
+            label="✅ Dashboard Ready!",
+            state="complete"
+        )
+
+        layout = result["dashboard_layout"]
+        datasets = result["datasets"]
+
+        st.success("Dashboard Generated!")
+
+        for component in layout:
+
+            st.subheader(component["title"])
+
+            df = datasets[component["id"]]
+
+            if component["type"] == "table":
+
+                st.dataframe(df)
+
+            elif component["type"] == "kpi":
+
+                st.metric(
+                    component["title"],
+                    df.iloc[0, 0]
+                )
+
+            elif component["type"] == "chart":
+
+                chart = component["chart_type"]
+
+                if chart == "line":
+
+                    fig = px.line(
+                        df,
+                        x=component["x"],
+                        y=component["y"]
+                    )
+
+                elif chart == "bar":
+
+                    fig = px.bar(
+                        df,
+                        x=component["x"],
+                        y=component["y"]
+                    )
+
+                elif chart == "pie":
+
+                    fig = px.pie(
+                        df,
+                        names=component["x"],
+                        values=component["y"]
+                    )
+
+                elif chart == "scatter":
+
+                    fig = px.scatter(
+                        df,
+                        x=component["x"],
+                        y=component["y"]
+                    )
+
+                else:
+
+                    st.warning(
+                        f"Unsupported chart type: {chart}"
+                    )
+
+                    continue
+
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True
+                )
+
+    st.session_state.history.append(
+        {
+            "role": "assistant",
+            "content": "Dashboard generated successfully."
+        }
+    )

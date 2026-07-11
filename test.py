@@ -1,16 +1,19 @@
-from tools.sqltools import run_sql
-import tools.sqltools as sqltools
-from tools.chart_tool import generate_chart
-import tools.chart_tool as chart_tool
+# test_retrieval.py
 
-result_text = run_sql.invoke({"query": "SELECT Country, COUNT(*) as OrderCount FROM Orders JOIN Customers ON Orders.CustomerID = Customers.CustomerID GROUP BY Country"})
-print("run_sql text output:\n", result_text)
-print("\nStashed DataFrame:\n", sqltools.last_query_result)
+from nodes.retreival import search_dashboard, index_dashboard
 
-chart_result = generate_chart.invoke({"chart_type": "bar", "x_column": "Country", "y_column": "OrderCount"})
-print("\ngenerate_chart output:", chart_result)
+# Step 1: index a fake dashboard
+index_dashboard("dashboard_1", "show me monthly sales")
+print("Indexed dashboard_1")
 
-print("\nNumber of charts stashed:", len(chart_tool.generated_charts))
+# Step 2: search with the EXACT same text — should match
+result = search_dashboard("show me monthly sales")
+print("Exact match search result:", result)
 
-if chart_tool.generated_charts:
-    chart_tool.generated_charts[0].show()
+# Step 3: search with a SIMILAR but not identical phrasing — should still match
+result = search_dashboard("what were the monthly sales figures")
+print("Similar phrasing search result:", result)
+
+# Step 4: search with something UNRELATED — should NOT match
+result = search_dashboard("what is the capital of France")
+print("Unrelated search result:", result)

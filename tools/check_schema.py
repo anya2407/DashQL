@@ -1,8 +1,5 @@
 import sqlite3
-from langchain_core.tools import tool
 
-
-@tool
 def get_full_schema() -> str:
     """Returns the full database schema: every table and its columns.
     Call this before writing any SQL query, to confirm exact table and column names."""
