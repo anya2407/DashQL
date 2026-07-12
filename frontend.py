@@ -1,6 +1,7 @@
 import streamlit as st
 import uuid
 import plotly.express as px
+import pandas as pd
 
 from main import chatbot
 
@@ -98,7 +99,7 @@ if user_input:
 
             st.subheader(component["title"])
 
-            df = datasets[component["id"]]
+            df = pd.DataFrame(datasets[component["id"]])
 
             if component["type"] == "table":
 

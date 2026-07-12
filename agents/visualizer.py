@@ -38,7 +38,7 @@ def create_dashboard_layout(
 
     for component in components:
 
-        df = datasets[component["id"]]
+        df = pd.DataFrame(datasets[component["id"]])
 
         component_info.append({
 

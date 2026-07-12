@@ -94,7 +94,7 @@ def sql_executor_node(state: DashState):
     datasets = {}
     for component in state["sql_queries"]:
         df = execute_sql(component["sql"])
-        datasets[component["id"]] = df
+        datasets[component["id"]] = df.to_dict("records")
     return {
         "progress": "🗄 Executing SQL...",
         "datasets": datasets
