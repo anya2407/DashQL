@@ -1,7 +1,7 @@
 import streamlit as st
 import uuid
-import plotly.express as px
 import pandas as pd
+import plotly.express as px
 
 from main import chatbot
 
@@ -15,7 +15,41 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📊 DashQL")
+st.markdown("""
+<style>
+    div[data-testid="stMetric"] {
+        background-color: #FBFAF7;
+        border: 1px solid #DAD6CB;
+        border-radius: 12px;
+        padding: 16px;
+    }
+    .dashql-insight {
+        background-color: #EEEDFE;
+        border-radius: 8px;
+        padding: 14px 16px;
+        margin-bottom: 20px;
+        color: #3C3489;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+    .dashql-card {
+        background-color: #FBFAF7;
+        border: 1px solid #DAD6CB;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<div style="margin-bottom: 1.5rem;">
+    <h2 style="font-size: 28px; font-weight: 500; margin: 0; color: #2A2822;">📊 DashQL</h2>
+    <p style="font-size: 14px; color: #7A7768; margin: 4px 0 0;">
+        Ask for a dashboard, get it instantly — powered by natural language SQL generation
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 # -----------------------------
 # Session State
@@ -38,7 +72,6 @@ if "history" not in st.session_state:
 # -----------------------------
 
 for msg in st.session_state.history:
-
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
@@ -50,22 +83,14 @@ user_input = st.chat_input("Describe the dashboard you want...")
 
 if user_input:
 
-    st.session_state.history.append(
-        {
-            "role": "user",
-            "content": user_input
-        }
-    )
+    st.session_state.history.append({"role": "user", "content": user_input})
 
     with st.chat_message("user"):
         st.markdown(user_input)
 
     with st.chat_message("assistant"):
 
-        status = st.status(
-            "⚙️ Generating Dashboard...",
-            expanded=True
-        )
+        status = st.status("⚙️ Generating Dashboard...", expanded=True)
 
         initial_state = {
             "messages": [],
@@ -83,87 +108,80 @@ if user_input:
         for step in chatbot.stream(initial_state, config=CONFIG, stream_mode="values"):
             if step.get("progress"):
                 status.write(step["progress"])
-            result = step  # keeps updating; ends up holding the final state
+            result = step
 
-        status.update(
-            label="✅ Dashboard Ready!",
-            state="complete"
-        )
+        status.update(label="✅ Dashboard Ready!", state="complete")
 
         layout = result["dashboard_layout"]
         datasets = result["datasets"]
 
-        st.success("Dashboard Generated!")
+        # ---- Insight banner ----
+        if result.get("answer"):
+            st.markdown(
+                f'<div class="dashql-insight">💡 {result["answer"]}</div>',
+                unsafe_allow_html=True
+            )
 
-        for component in layout:
+        # ---- KPI row ----
+        kpis = [c for c in layout if c["type"] == "kpi"]
+        others = [c for c in layout if c["type"] != "kpi"]
 
-            st.subheader(component["title"])
+        if kpis:
+            kpi_cols = st.columns(len(kpis))
+            for i, component in enumerate(kpis):
+                with kpi_cols[i]:
+                    df = pd.DataFrame(datasets[component["id"]])
+                    st.metric(component["title"], df.iloc[0, 0])
 
-            df = pd.DataFrame(datasets[component["id"]])
+        # ---- Charts + tables, 2-column grid ----
+        DISPLAY_LIMIT = 20
 
-            if component["type"] == "table":
+        for i in range(0, len(others), 2):
+            row_components = others[i:i + 2]
+            cols = st.columns(len(row_components))
 
-                st.dataframe(df)
+            for col, component in zip(cols, row_components):
+                with col:
+                    df = pd.DataFrame(datasets[component["id"]])
 
-            elif component["type"] == "kpi":
+                    st.markdown(f'<div class="dashql-card">', unsafe_allow_html=True)
+                    st.markdown(f"**{component['title']}**")
 
-                st.metric(
-                    component["title"],
-                    df.iloc[0, 0]
-                )
+                    if component["type"] == "table":
+                        if len(df) > DISPLAY_LIMIT:
+                            st.caption(f"Showing first {DISPLAY_LIMIT} of {len(df)} rows")
+                            st.dataframe(df.head(DISPLAY_LIMIT), use_container_width=True)
+                        else:
+                            st.dataframe(df, use_container_width=True)
 
-            elif component["type"] == "chart":
+                    elif component["type"] == "chart":
+                        chart = component["chart_type"]
 
-                chart = component["chart_type"]
+                        if chart == "line":
+                            fig = px.line(df, x=component["x"], y=component["y"])
+                        elif chart == "bar":
+                            fig = px.bar(df, x=component["x"], y=component["y"])
+                        elif chart == "pie":
+                            fig = px.pie(df, names=component["x"], values=component["y"])
+                        elif chart == "scatter":
+                            fig = px.scatter(df, x=component["x"], y=component["y"])
+                        else:
+                            st.warning(f"Unsupported chart type: {chart}")
+                            st.markdown("</div>", unsafe_allow_html=True)
+                            continue
 
-                if chart == "line":
+                        fig.update_layout(
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            plot_bgcolor="rgba(0,0,0,0)",
+                            margin=dict(l=10, r=10, t=10, b=10),
+                            height=260,
+                            font=dict(color="#2A2822")
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
 
-                    fig = px.line(
-                        df,
-                        x=component["x"],
-                        y=component["y"]
-                    )
+                    st.markdown("</div>", unsafe_allow_html=True)
 
-                elif chart == "bar":
-
-                    fig = px.bar(
-                        df,
-                        x=component["x"],
-                        y=component["y"]
-                    )
-
-                elif chart == "pie":
-
-                    fig = px.pie(
-                        df,
-                        names=component["x"],
-                        values=component["y"]
-                    )
-
-                elif chart == "scatter":
-
-                    fig = px.scatter(
-                        df,
-                        x=component["x"],
-                        y=component["y"]
-                    )
-
-                else:
-
-                    st.warning(
-                        f"Unsupported chart type: {chart}"
-                    )
-
-                    continue
-
-                st.plotly_chart(
-                    fig,
-                    use_container_width=True
-                )
-
-    st.session_state.history.append(
-        {
-            "role": "assistant",
-            "content": "Dashboard generated successfully."
-        }
-    )
+    st.session_state.history.append({
+        "role": "assistant",
+        "content": "Dashboard generated successfully."
+    })

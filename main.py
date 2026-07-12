@@ -11,7 +11,10 @@ from agents.sql_generator import generate_sql
 from tools.database import execute_sql
 from agents.visualizer import create_dashboard_layout
 from tools.github import save_dashboard_to_github, load_dashboard_from_github
+from tools.governance import check_all_components
+from agents.insights import generate_insights
 import sqlite3
+
 import uuid
 import datetime
 
@@ -32,6 +35,7 @@ class DashState(TypedDict):
     dashboard_layout: list
     answer: str
     progress: str
+    governance_attempts: int
 
 
 # -------------------------
@@ -58,8 +62,6 @@ def load_from_cache_node(state: DashState):
     dashboard_data = load_dashboard_from_github(state["dashboard_id"])
 
     if dashboard_data is None:
-        # Safety fallback: Chroma said there's a match, but GitHub fetch
-        # failed. Treat it as a miss instead of crashing.
         return {
             "progress": "⚠️ Cache entry was stale, generating fresh instead...",
             "dashboard_found": False
@@ -90,6 +92,29 @@ def sql_generator_node(state: DashState):
     }
 
 
+MAX_GOVERNANCE_RETRIES = 2
+
+def governance_node(state: DashState):
+    result = check_all_components(state["sql_queries"])
+
+    if result["passed"]:
+        return {
+            "progress": "🛡️ Governance check passed...",
+        }
+
+    attempts = state.get("governance_attempts", 0) + 1
+
+    violation_summary = "; ".join(
+        f"Component {f['id']}: {', '.join(f['violations'])}"
+        for f in result["failed_components"]
+    )
+
+    return {
+        "progress": f"⚠️ Governance check failed (attempt {attempts}): {violation_summary}",
+        "governance_attempts": attempts,
+    }
+
+
 def sql_executor_node(state: DashState):
     datasets = {}
     for component in state["sql_queries"]:
@@ -106,6 +131,18 @@ def visualization_node(state: DashState):
     return {
         "progress": "📊 Designing dashboard...",
         "dashboard_layout": layout
+    }
+
+
+def insights_node(state: DashState):
+    insight_text = generate_insights(
+        state["request"],
+        state["sql_queries"],
+        state["datasets"]
+    )
+    return {
+        "progress": "💡 Generating insights...",
+        "answer": insight_text
     }
 
 
@@ -129,8 +166,17 @@ def save_to_cache_node(state: DashState):
     }
 
 
+def governance_fail_node(state: DashState):
+    return {
+        "progress": "❌ Could not generate a compliant dashboard after multiple attempts.",
+        "answer": "I wasn't able to generate a dashboard that meets data governance rules. Try rephrasing your request.",
+        "dashboard_layout": [],
+        "datasets": {},
+    }
+
+
 # -------------------------
-# Routing
+# Routing (function definitions only — no graph calls here)
 # -------------------------
 
 def route_after_retrieval(state: DashState):
@@ -140,15 +186,37 @@ def route_after_retrieval(state: DashState):
 
 
 def route_after_cache_load(state: DashState):
-    # load_from_cache_node might have flipped dashboard_found to False
-    # if the GitHub fetch failed (stale cache entry)
     if state["dashboard_found"]:
         return "sql_executor"
     return "planner"
 
 
+def route_after_governance(state: DashState):
+    result = check_all_components(state["sql_queries"])
+
+    if result["passed"]:
+        return "sql_executor"
+
+    if state.get("governance_attempts", 0) >= MAX_GOVERNANCE_RETRIES:
+        return "fail"
+
+    return "sql_generator"
+
+
+def route_after_execution(state: DashState):
+    if state.get("dashboard_layout"):
+        return "insights"
+    return "visualization"
+
+
+def route_after_insights(state: DashState):
+    if state.get("dashboard_id"):
+        return "end"
+    return "save_to_cache"
+
+
 # -------------------------
-# Graph
+# Graph (all graph.* calls live here, in order)
 # -------------------------
 
 graph = StateGraph(DashState)
@@ -157,8 +225,11 @@ graph.add_node("retrieval", retrieval_node)
 graph.add_node("load_from_cache", load_from_cache_node)
 graph.add_node("planner", planner_node)
 graph.add_node("sql_generator", sql_generator_node)
+graph.add_node("governance", governance_node)
+graph.add_node("governance_fail", governance_fail_node)
 graph.add_node("sql_executor", sql_executor_node)
 graph.add_node("visualization", visualization_node)
+graph.add_node("insights", insights_node)
 graph.add_node("save_to_cache", save_to_cache_node)
 
 graph.add_edge(START, "retrieval")
@@ -176,25 +247,30 @@ graph.add_conditional_edges(
 )
 
 graph.add_edge("planner", "sql_generator")
-graph.add_edge("sql_generator", "sql_executor")
+graph.add_edge("sql_generator", "governance")
 
-# sql_executor now has two possible next steps depending on how we got here:
-# - came from cache (load_from_cache) -> go straight to END, skip visualization
-# - came from fresh generation (planner path) -> go to visualization, then save
+graph.add_conditional_edges(
+    "governance",
+    route_after_governance,
+    {"sql_executor": "sql_executor", "sql_generator": "sql_generator", "fail": "governance_fail"}
+)
 
-def route_after_execution(state: DashState):
-    # If dashboard_layout is already set, we came from cache -> done
-    if state.get("dashboard_layout"):
-        return "end"
-    return "visualization"
+graph.add_edge("governance_fail", END)
 
 graph.add_conditional_edges(
     "sql_executor",
     route_after_execution,
-    {"end": END, "visualization": "visualization"}
+    {"insights": "insights", "visualization": "visualization"}
 )
 
-graph.add_edge("visualization", "save_to_cache")
+graph.add_edge("visualization", "insights")
+
+graph.add_conditional_edges(
+    "insights",
+    route_after_insights,
+    {"save_to_cache": "save_to_cache", "end": END}
+)
+
 graph.add_edge("save_to_cache", END)
 
 

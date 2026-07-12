@@ -18,6 +18,7 @@ def is_safe_select(query: str) -> bool:
         return False
 
 
+MAX_ROWS = 200
 def execute_sql(query: str) -> pd.DataFrame:
     """
     Executes a read-only SQL query and returns
@@ -33,6 +34,10 @@ def execute_sql(query: str) -> pd.DataFrame:
 
     try:
         df = pd.read_sql_query(query, conn)
+
+        if len(df) > MAX_ROWS:
+            df = df.head(MAX_ROWS)
+
         return df
 
     finally:
