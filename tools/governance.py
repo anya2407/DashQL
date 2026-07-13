@@ -46,7 +46,7 @@ def check_query(query: str) -> dict:
     violations = []
 
     try:
-        parsed = sqlglot.parse_one(query)
+        parsed = sqlglot.parse_one(query, dialect="sqlite")
     except Exception as e:
         return {"passed": False, "violations": [f"Query failed to parse: {e}"]}
 

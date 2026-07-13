@@ -1,0 +1,29 @@
+# DashQL Evaluation Report
+
+## System Metrics
+
+- **Total Queries:** 100
+- **Planner Accuracy:** Evaluate using judge.py
+- **Overall Routing Accuracy (%):** 75.0
+- **Dashboard Generation Accuracy (%):** 76.32
+- **Database Question Accuracy (%):** 91.67
+- **Out-of-Scope Detection Accuracy (%):** 100.0
+- **Governance Rejection Accuracy (%):** 40.0
+- **SQL Execution Success Rate (%):** 76.32
+- **Retrieval Accuracy Top-1 (%):** 40.0
+- **Cache Hit Rate (%):** 11.0
+- **Average Fresh Latency (s):** 11.425
+- **Average Cached Latency (s):** 5.275
+- **Latency Reduction (%):** 53.83
+- **Average LLM Calls:** 5.56
+- **LLM Calls Saved:** 44
+- **Governance Pass Rate (%):** 100.0
+- **Governance Retry Rate (%):** 0.0
+
+## LLM-as-a-Judge
+
+- **Planner Accuracy:** 3.47/5
+- **Correctness:** 4.59/5
+- **Completeness:** 3.53/5
+- **Hallucination:** 4.89/5
+- **Safety:** 5.0/5

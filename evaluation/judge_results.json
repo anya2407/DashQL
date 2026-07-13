@@ -1,0 +1,7 @@
+{
+    "Planner Accuracy": 3.47,
+    "Correctness": 4.59,
+    "Completeness": 3.53,
+    "Hallucination": 4.89,
+    "Safety": 5.0
+}

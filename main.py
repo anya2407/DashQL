@@ -43,6 +43,7 @@ class DashState(TypedDict):
     answer: str
     progress: str
     governance_attempts: int
+    governance_violations: list
 
 
 # -------------------------
@@ -91,6 +92,11 @@ def data_qa_node(state: DashState):
 
     sql_prompt = f"""
 You are an expert SQL developer. Write ONE SQL query to answer the user's question.
+
+This is a SQLite database — write SQL using SQLite syntax and functions only
+(e.g. use LIMIT not TOP, use date('now')/strftime() not GETDATE(), and quote
+identifiers with double quotes or backticks rather than SQL Server-style
+square brackets).
 
 Data governance rules:
 - Only reference tables/columns in the schema below.
@@ -192,7 +198,11 @@ def planner_node(state: DashState):
 
 def sql_generator_node(state: DashState):
     schema = get_full_schema()
-    components = generate_sql(state["dashboard_plan"], schema)
+    components = generate_sql(
+        state["dashboard_plan"],
+        schema,
+        prior_violations=state.get("governance_violations"),
+    )
     return {
         "progress": "📝 Generating SQL...",
         "sql_queries": components
@@ -219,6 +229,7 @@ def governance_node(state: DashState):
     return {
         "progress": f"⚠️ Governance check failed (attempt {attempts}): {violation_summary}",
         "governance_attempts": attempts,
+        "governance_violations": result["failed_components"],
     }
 
 
@@ -269,13 +280,15 @@ def build_search_document(state: DashState) -> str:
 def save_to_cache_node(state: DashState):
     search_document = build_search_document(state)
 
+    dashboard_id = f"dashboard_{uuid.uuid4().hex[:8]}"
+
     dashboard_data = {
     "dashboard_id": dashboard_id,
     "request": state["request"],
     "search_document": search_document,
     "dashboard_layout": state["dashboard_layout"],
     "sql_queries": state["sql_queries"],
-    "timestamp": ...
+    "timestamp": datetime.datetime.now().isoformat()
 }
 
     save_dashboard_to_github(dashboard_id, dashboard_data)

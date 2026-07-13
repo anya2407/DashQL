@@ -1,6 +1,9 @@
 import chromadb
 from langchain_openai import OpenAIEmbeddings
 from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # -----------------------------
 # Setup (runs once, at import)
@@ -9,7 +12,10 @@ from typing import Optional
 _embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
 
 _chroma_client = chromadb.PersistentClient(path="vector_store/")
-_collection = _chroma_client.get_or_create_collection(name="dashboards")
+_collection = _chroma_client.get_or_create_collection(
+    name="dashboards",
+    metadata={"hnsw:space": "cosine"}
+)
 
 # -----------------------------
 # Similarity thresholds

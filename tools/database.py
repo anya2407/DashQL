@@ -12,7 +12,7 @@ def is_safe_select(query: str) -> bool:
     """
 
     try:
-        parsed = sqlglot.parse_one(query)
+        parsed = sqlglot.parse_one(query, dialect="sqlite")
         return parsed.key.upper() == "SELECT"
     except Exception:
         return False
