@@ -1,11 +1,11 @@
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import JsonOutputParser
 
 load_dotenv()
 
-model = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
+model = ChatOpenAI(
+    model="gpt-4o",
     temperature=0
 )
 

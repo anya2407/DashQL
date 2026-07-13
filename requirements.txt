@@ -1,14 +1,12 @@
 streamlit
 langgraph
 langchain
-langchain-google-genai
-google-generativeai
+langchain-openai
 sqlalchemy
 pandas
 numpy
 plotly
 chromadb
-sentence-transformers
 sqlglot
 python-dotenv
 PyGithub

@@ -115,6 +115,16 @@ if user_input:
         layout = result["dashboard_layout"]
         datasets = result["datasets"]
 
+        if not layout and result.get("answer"):
+            # Out-of-scope case — just show the message, skip dashboard rendering
+            st.markdown(
+                f'<div class="dashql-insight">💬 {result["answer"]}</div>',
+                unsafe_allow_html=True
+            )
+            st.stop()
+
+        st.success("Dashboard Generated!")
+
         # ---- Insight banner ----
         if result.get("answer"):
             st.markdown(
